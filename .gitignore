@@ -1,1 +1,23 @@
 venv/
+# --- Python / Flask Secrets ---
+backend/config.py
+.env
+__pycache__/
+*.pyc
+instance/
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# --- Node / Vue Dependencies ---
+node_modules/
+frontend/dist/
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.production.local
+
+# --- OS Specific ---
+.DS_Store
+Thumbs.db
+project_snapshot.py
+project_snapshot.py:Zone.Identifier
+structure_and_contents.txt
