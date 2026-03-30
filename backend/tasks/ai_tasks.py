@@ -1,16 +1,15 @@
-from celery import current_app as celery_app
+from celery import shared_task
 from utils.ai_handler import analyze_thesis_with_gemini
 
 # The name must exactly match the CELERY_TASK_ROUTES in your config.py
-@celery_app.task(name="tasks.analyze_thesis", bind=True, max_retries=3)
+# SECURITY FIX: Removed max_retries from Celery level.
+# Retry logic is handled entirely within ai_handler.py to prevent
+# compounding retries (was 3 Celery × 3 handler = 9 total attempts).
+@shared_task(name="tasks.analyze_thesis", bind=True, max_retries=0)
 def process_thesis_task(self, submission_id):
     """
     Background worker task to trigger Gemini AI evaluation.
+    All retry and error handling is managed by analyze_thesis_with_gemini().
     """
-    try:
-        analyze_thesis_with_gemini(submission_id)
-        return True
-    except Exception as exc:
-        celery_app.log.exception(f"AI Task failed for submission {submission_id}")
-        # Exponential backoff for network drops or Gemini rate limits
-        raise self.retry(exc=exc, countdown=2 ** self.request.retries)
+    analyze_thesis_with_gemini(submission_id)
+    return True

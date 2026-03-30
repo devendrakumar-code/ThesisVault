@@ -1,14 +1,19 @@
 # tasks/email_tasks.py
-import time
-from datetime import datetime, timedelta
-from celery import current_app as celery_app
-from flask import current_app
-from flask_mailman import EmailMessage
-from extentions import db
-from models import Invite  # Invite model described below
+from datetime import datetime
+from smtplib import SMTPSenderRefused
+import logging
 
-# Task configuration: bind=True to access self.retry and request
-@celery_app.task(bind=True, name="tasks.send_onboarding_email_async", max_retries=5, acks_late=True)
+from celery import shared_task
+from flask import current_app
+from flask_mailman import EmailMultiAlternatives
+
+from extentions import db
+from models import Invite
+
+logger = logging.getLogger(__name__)
+
+
+@shared_task(bind=True, name='tasks.send_onboarding_email_async', max_retries=5, acks_late=True)
 def send_onboarding_email_task(self, invite_id):
     """
     Worker task that sends an onboarding email for a persisted Invite.
@@ -18,51 +23,66 @@ def send_onboarding_email_task(self, invite_id):
     try:
         invite = Invite.query.get(invite_id)
         if not invite:
-            celery_app.log.warning("Invite not found %s", invite_id)
+            logger.warning('Invite not found %s', invite_id)
             return False
 
-        # If already sent, skip
-        if invite.status == "sent":
-            celery_app.log.info("Invite already sent %s", invite_id)
+        if invite.status == 'sent':
+            logger.info('Invite already sent %s', invite_id)
             return True
 
-        # Build message from invite row
-        msg_kwargs = {
-            "subject": invite.subject,
-            "body": invite.text_body,
-            "html": invite.html_body,
-            "from_email": current_app.config.get("MAIL_DEFAULT_SENDER"),
-            "to": [invite.email]
-        }
+        mail_username = current_app.config.get('MAIL_USERNAME')
+        mail_password = current_app.config.get('MAIL_PASSWORD')
+        if not mail_username or not mail_password:
+            invite.status = 'failed'
+            db.session.commit()
+            logger.error('Mail credentials are not configured. Set MAIL_USERNAME and MAIL_PASSWORD in the environment or .env file before sending invites.')
+            return False
 
-        msg = EmailMessage(**msg_kwargs)
+        msg = EmailMultiAlternatives(
+            subject=invite.subject,
+            body=invite.text_body,
+            from_email=current_app.config.get('MAIL_DEFAULT_SENDER'),
+            to=[invite.email],
+        )
+        msg.attach_alternative(invite.html_body, 'text/html')
         msg.send()
 
-        # Mark invite as sent
-        invite.status = "sent"
+        invite.status = 'sent'
         invite.sent_at = datetime.utcnow()
         db.session.commit()
 
-        celery_app.log.info("Onboarding email sent invite_id=%s email=%s", invite_id, invite.email)
+        logger.info('Onboarding email sent invite_id=%s email=%s', invite_id, invite.email)
         return True
 
+    except SMTPSenderRefused as exc:
+        db.session.rollback()
+        if getattr(exc, 'smtp_code', None) == 530:
+            invite = Invite.query.get(invite_id)
+            if invite and invite.status != 'sent':
+                invite.status = 'failed'
+                db.session.commit()
+            logger.exception('SMTP authentication failed while sending invite %s. Check Mailtrap username, password, and default sender configuration.', invite_id)
+            return False
+        retries = getattr(self.request, 'retries', 0)
+        countdown = min(60 * (2 ** retries), 3600)
+        logger.exception('Failed to send invite %s attempt=%s, retrying in %s seconds', invite_id, retries, countdown)
+        raise self.retry(exc=exc, countdown=countdown)
     except Exception as exc:
         db.session.rollback()
-        # Exponential backoff: base 60s, cap at 1 hour
-        retries = getattr(self.request, "retries", 0)
+        retries = getattr(self.request, 'retries', 0)
         countdown = min(60 * (2 ** retries), 3600)
-        celery_app.log.exception("Failed to send invite %s attempt=%s, retrying in %s seconds", invite_id, retries, countdown)
+        logger.exception('Failed to send invite %s attempt=%s, retrying in %s seconds', invite_id, retries, countdown)
         raise self.retry(exc=exc, countdown=countdown)
 
 
-@celery_app.task(name="tasks.cleanup_expired_invites")
+@shared_task(name='tasks.cleanup_expired_invites')
 def cleanup_expired_invites():
     """Scheduled task to mark old invites as expired."""
     now = datetime.utcnow()
     expired_count = Invite.query.filter(
         Invite.status == 'queued',
-        Invite.expires_at < now
-    ).update({"status": "expired"})
-    
+        Invite.expires_at < now,
+    ).update({'status': 'expired'})
+
     db.session.commit()
-    return f"Expired {expired_count} invites."
+    return f'Expired {expired_count} invites.'

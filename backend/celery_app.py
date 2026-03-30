@@ -3,14 +3,21 @@ from celery.schedules import crontab
 from kombu import Exchange, Queue
 
 def make_celery(app):
+    broker_url = app.config.get('CELERY_BROKER_URL')
+    backend_url = app.config.get('CELERY_RESULT_BACKEND')
+    # Diagnostic log to verify config loading during worker startup
+    app.logger.info(f"Initializing Celery with broker: {broker_url}")
+    
     celery = Celery(
         app.import_name,
-        broker=app.config.get('CELERY_BROKER_URL'),
-        backend=app.config.get('CELERY_RESULT_BACKEND')
+        broker=broker_url,
+        backend=backend_url
     )
 
     # Minimal safe defaults; override via app.config if needed
     celery.conf.update(
+        broker_url=broker_url,
+        result_backend=backend_url,
         task_serializer=app.config.get('CELERY_TASK_SERIALIZER', 'json'),
         result_serializer=app.config.get('CELERY_RESULT_SERIALIZER', 'json'),
         accept_content=app.config.get('CELERY_ACCEPT_CONTENT', ['json']),
@@ -43,12 +50,19 @@ def make_celery(app):
     class ContextTask(celery.Task):
         def __call__(self, *args, **kwargs):
             with app.app_context():
-                return self.run(*args, **kwargs)
+                try:
+                    return self.run(*args, **kwargs)
+                finally:
+                    # Clean up the session after task completes
+                    from extentions import db
+                    db.session.remove()
 
         def on_failure(self, exc, task_id, args, kwargs, einfo):
             # Centralized failure logging
             app.logger.exception("Celery task failed %s args=%s kwargs=%s", task_id, args, kwargs)
 
     celery.Task = ContextTask
+    celery.set_default()
+    app.extensions["celery"] = celery
     return celery
 

@@ -1,12 +1,32 @@
 venv/
 # --- Python / Flask Secrets ---
 backend/config.py
+backend/config_template.py
 .env
+.env.*
+!.env.example
 __pycache__/
 *.pyc
 instance/
 backend/uploads/*
 !backend/uploads/.gitkeep
+
+# --- Backend Tools / Logs ---
+backend/diagnose_app.py
+backend/list_models.py
+backend/check_users.py
+backend/celerybeat-schedule
+backend/credentials.log
+backend/cleanup_extra_seed.py
+backend/migrate_invite.py
+backend/SCHEMA_EVOLUTION.md
+backend/extra_seed.py
+backend/test_system.py
+
+# --- Test Artifacts ---
+backend/diag.pdf
+backend/load_test_500k.py
+backend/cleanup_load_test.py
 
 # --- Node / Vue Dependencies ---
 node_modules/
@@ -21,3 +41,6 @@ Thumbs.db
 project_snapshot.py
 project_snapshot.py:Zone.Identifier
 structure_and_contents.txt
+frontend/fix_modal.py
+frontend/postcss.config.js
+

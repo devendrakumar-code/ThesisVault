@@ -23,6 +23,7 @@ def create_and_queue_invite(email, name, onboarding_base_url, purpose, created_b
 
     invite = Invite(
         email=email,
+        name=name,
         token=token,
         subject=subject,
         text_body=text_body,
@@ -40,7 +41,7 @@ def create_and_queue_invite(email, name, onboarding_base_url, purpose, created_b
         send_onboarding_email_task.delay(invite.id)
     else:
         # Optionally call the task synchronously for small installs
-        send_onboarding_email_task.apply(args=(invite.id,))
+        send_onboarding_email_task(invite.id)
 
     return invite.id
 

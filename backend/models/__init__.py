@@ -1,7 +1,7 @@
 from .base import (
     BaseModel, Role, UserRole, Plan, Organization, 
-    User, StudentProfile, ProfessorProfile, Project, Submission,
-    Enrollment, RevokedToken, OneTimeToken, Invite
+    User, StudentProfile, ProfessorProfile, Project, Milestone, Submission,
+    Enrollment, RevokedToken, OneTimeToken, Invite, SubscriptionHistory, ActivityLog
 )
 from .events import _add_soft_delete_filter, update_project_counters
 from .helpers import create_project_safe
@@ -9,7 +9,7 @@ from .helpers import create_project_safe
 # This list allows 'from models import *' to work cleanly
 __all__ = [
     "BaseModel", "Role", "UserRole", "Plan", "Organization", 
-    "User", "StudentProfile", "ProfessorProfile", "Project", "Submission",
-    "Enrollment", "RevokedToken", "OneTimeToken", "Invite",
+    "User", "StudentProfile", "ProfessorProfile", "Project", "Milestone", "Submission",
+    "Enrollment", "RevokedToken", "OneTimeToken", "Invite", "SubscriptionHistory",
     "create_project_safe"
 ]
