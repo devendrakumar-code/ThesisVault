@@ -195,8 +195,15 @@ def analyze_thesis_with_gemini(submission_id: int) -> None:
                     }
                     submission.status = 'completed'
                     submission.ai_feedback = None
-                    org.monthly_ai_count += 1
-
+                    
+                    # Atomic Increment (Requirement 4: Prevent race conditions)
+                    from sqlalchemy import update
+                    from models import Organization
+                    db.session.execute(
+                        update(Organization)
+                        .where(Organization.id == org.id)
+                        .values(monthly_ai_count=Organization.monthly_ai_count + 1)
+                    )
                     db.session.commit()
                     current_app.logger.info(
                         'Gemini analysis completed for submission %s with model %s. Org usage: %s/%s',

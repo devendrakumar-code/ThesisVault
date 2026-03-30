@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from marshmallow import Schema, fields, validate
 
 # --- USER SCHEMAS ---
@@ -9,7 +10,9 @@ class UserSchema(Schema):
     password = fields.String(required=True, load_only=True, validate=validate.Length(min=8))
     organization_id = fields.String(required=True)
     active = fields.Boolean(dump_only=True)
+    profile_image = fields.String(dump_only=True)
     roles = fields.List(fields.Nested(lambda: RoleSchema()), dump_only=True)
+    organization = fields.Nested(lambda: OrganizationSchema(), dump_only=True)
 
 class RoleSchema(Schema):
     id = fields.String(dump_only=True)
@@ -47,14 +50,43 @@ class MilestoneSchema(Schema):
     deadline = fields.DateTime(required=True)
     created_at = fields.DateTime(dump_only=True)
 
+class PlanSchema(Schema):
+    id = fields.String(dump_only=True)
+    name = fields.String(dump_only=True)
+    max_active_projects = fields.Integer(dump_only=True)
+    max_students = fields.Integer(dump_only=True)
+    monthly_ai_limit = fields.Integer(dump_only=True)
+    validity_days = fields.Integer(dump_only=True)
+    features = fields.Dict(dump_only=True)
+    has_ai_feature = fields.Boolean(dump_only=True)
+
 # --- ORGANIZATION SCHEMAS ---
 class OrganizationSchema(Schema):
     id = fields.String(dump_only=True)
     name = fields.String(required=True, validate=validate.Length(min=2, max=100))
     domain = fields.String(allow_none=True, validate=validate.Length(max=100))
     plan_id = fields.String(required=True)
+    current_plan = fields.Nested(PlanSchema(), dump_only=True, data_key='current_plan', attribute='plan')
     active_projects = fields.Integer(dump_only=True)
+    active_students = fields.Integer(dump_only=True)
+    monthly_ai_count = fields.Integer(dump_only=True)
+    subscription_status = fields.String(dump_only=True)
+    subscription_ends_at = fields.DateTime(dump_only=True)
+    trial_ends_at = fields.DateTime(dump_only=True)
+    grace_period_ends_at = fields.DateTime(dump_only=True)
+    days_left = fields.Method("get_days_left", dump_only=True)
     status = fields.String(dump_only=True)
+
+    def get_days_left(self, obj):
+        if not obj.subscription_ends_at: return 0
+        # Ensure database datetime is offset-aware (UTC) for comparison
+        ends_at = obj.subscription_ends_at
+        if ends_at.tzinfo is None:
+            ends_at = ends_at.replace(tzinfo=timezone.utc)
+        
+        now = datetime.now(timezone.utc)
+        delta = ends_at - now
+        return max(0, delta.days)
 
 
 # Usually read-only for the frontend (used to display pricing pages)

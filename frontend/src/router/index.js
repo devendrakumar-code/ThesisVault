@@ -108,6 +108,12 @@ const routes = [
         name: 'profile-settings',
         component: () => import('@/views/profile/ProfileSettingsView.vue'),
         meta: {requiresAuth: true}
+    },
+    {
+        path: '/subscription',
+        name: 'subscription',
+        component: () => import('@/views/admin/SubscriptionView.vue'),
+        meta: {requiresAuth: true, role: 'admin'}
     }
 ];
 

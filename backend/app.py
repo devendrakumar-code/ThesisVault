@@ -1,4 +1,5 @@
-from flask import Flask
+from datetime import datetime, timedelta, timezone
+from flask import Flask, send_from_directory
 from sqlalchemy import inspect, text
 
 from config import LocalDevelopmentConfig, ProductionConfig
@@ -29,6 +30,85 @@ def _ensure_runtime_schema(app):
                 connection.execute(text('ALTER TABLE submissions ADD COLUMN resubmission_deadline DATETIME NULL'))
                 app.logger.info('Added submissions.resubmission_deadline column at startup.')
 
+    if inspector.has_table('users'):
+        user_columns = {column['name'] for column in inspector.get_columns('users')}
+        if 'profile_image' not in user_columns:
+            with db.engine.begin() as connection:
+                connection.execute(text('ALTER TABLE users ADD COLUMN profile_image VARCHAR(255) NULL'))
+            app.logger.info('Added users.profile_image column at startup.')
+
+    if inspector.has_table('organizations'):
+        org_columns = {column['name'] for column in inspector.get_columns('organizations')}
+        with db.engine.begin() as connection:
+            if 'active_students' not in org_columns:
+                connection.execute(text('ALTER TABLE organizations ADD COLUMN active_students INT DEFAULT 0 NOT NULL'))
+            if 'subscription_status' not in org_columns:
+                connection.execute(text('ALTER TABLE organizations ADD COLUMN subscription_status VARCHAR(20) DEFAULT "active"'))
+            if 'subscription_ends_at' not in org_columns:
+                connection.execute(text('ALTER TABLE organizations ADD COLUMN subscription_ends_at DATETIME NULL'))
+            if 'trial_ends_at' not in org_columns:
+                connection.execute(text('ALTER TABLE organizations ADD COLUMN trial_ends_at DATETIME NULL'))
+            if 'grace_period_ends_at' not in org_columns:
+                connection.execute(text('ALTER TABLE organizations ADD COLUMN grace_period_ends_at DATETIME NULL'))
+            if 'monthly_ai_count' not in org_columns:
+                connection.execute(text('ALTER TABLE organizations ADD COLUMN monthly_ai_count INT DEFAULT 0 NOT NULL'))
+            if 'last_usage_reset' not in org_columns:
+                connection.execute(text('ALTER TABLE organizations ADD COLUMN last_usage_reset DATETIME DEFAULT CURRENT_TIMESTAMP'))
+            if 'is_maintenance' not in org_columns:
+                connection.execute(text('ALTER TABLE organizations ADD COLUMN is_maintenance BOOLEAN DEFAULT 0 NOT NULL'))
+        app.logger.info('Checked/Added missing organizations columns at startup.')
+
+    if inspector.has_table('plans'):
+        plan_columns = {column['name'] for column in inspector.get_columns('plans')}
+        with db.engine.begin() as connection:
+            if 'max_students' not in plan_columns:
+                connection.execute(text('ALTER TABLE plans ADD COLUMN max_students INT DEFAULT 100 NOT NULL'))
+            if 'monthly_ai_limit' not in plan_columns:
+                connection.execute(text('ALTER TABLE plans ADD COLUMN monthly_ai_limit INT DEFAULT 50 NOT NULL'))
+            if 'validity_days' not in plan_columns:
+                connection.execute(text('ALTER TABLE plans ADD COLUMN validity_days INT DEFAULT 30 NOT NULL'))
+            if 'features' not in plan_columns:
+                connection.execute(text('ALTER TABLE plans ADD COLUMN features JSON NULL'))
+            app.logger.info('Added missing plans columns at startup.')
+
+    # Requirement 4: Data-Driven Consistency
+    # Sync project_id for submissions if missing or mismatched with milestone
+    try:
+        from models import Submission, Milestone, Organization, Plan
+        with app.app_context():
+            # 1. Submission Sync
+            db.session.execute(text("""
+                UPDATE submissions 
+                INNER JOIN milestones ON submissions.milestone_id = milestones.id
+                SET submissions.project_id = milestones.project_id
+                WHERE submissions.project_id IS NULL OR submissions.project_id != milestones.project_id
+            """))
+            
+            # 2. Plan Metadata Enrichment (Ensures UI meters don't fail)
+            db.session.execute(text("""
+                UPDATE plans 
+                SET features = '{"ai_analysis": true, "premium_support": false}'
+                WHERE features IS NULL OR features = ''
+            """))
+
+            # 3. Organization Plan Safety (Ensures 'Pro' as default for orphans)
+            pro_plan = Plan.query.filter_by(name='Pro').first()
+            if pro_plan:
+                db.session.execute(text(f"UPDATE organizations SET plan_id = '{pro_plan.id}' WHERE plan_id IS NULL OR plan_id = ''"))
+            
+            # 4. Standardize Lifecycle Status & Dates (Ensures Display Meters work)
+            now_str = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+            ends_at_str = (datetime.now(timezone.utc) + timedelta(days=365)).strftime('%Y-%m-%d %H:%M:%S')
+            
+            db.session.execute(text(f"UPDATE organizations SET subscription_status = 'active' WHERE subscription_status IS NULL OR subscription_status = ''"))
+            db.session.execute(text(f"UPDATE organizations SET subscription_ends_at = '{ends_at_str}' WHERE subscription_ends_at IS NULL"))
+            
+            db.session.commit()
+            app.logger.info('Runtime data sync & refinement complete.')
+    except Exception as e:
+        db.session.rollback()
+        app.logger.warning('Skipped runtime data sync: %s', str(e))
+
 
 def create_app():
     create_db_if_not_exists()
@@ -47,19 +127,22 @@ def create_app():
     try:
         from flask_talisman import Talisman
 
-        Talisman(
-            app,
-            force_https=not app.debug,
-            content_security_policy={
-                'default-src': "'self'",
-                'style-src': ["'self'", "'unsafe-inline'"],
-                'img-src': ["'self'", 'data:', 'https:'],
-                'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-                'frame-ancestors': ["'self'", 'http://localhost:5173', 'http://127.0.0.1:5173'],
-            },
-            frame_options=None,
-        )
-        app.logger.info('Flask-Talisman security headers enabled.')
+        if app.debug:
+            app.logger.info('Flask-Talisman skipped in debug mode to allow local cross-origin development.')
+        else:
+            Talisman(
+                app,
+                force_https=True,
+                content_security_policy={
+                    'default-src': "'self'",
+                    'style-src': ["'self'", "'unsafe-inline'"],
+                    'img-src': ["'self'", 'data:', 'https:'],
+                    'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+                    'frame-ancestors': ["'self'", 'http://localhost:5173', 'http://127.0.0.1:5173'],
+                },
+                frame_options=None,
+            )
+            app.logger.info('Flask-Talisman security headers enabled.')
     except ImportError:
         app.logger.warning('flask-talisman not installed. Security headers (CSP/HSTS) are NOT active.')
 
@@ -81,6 +164,7 @@ def create_app():
     from routes.projects import projects_bp
     from routes.submission import submissions_bp
     from routes.milestones import milestones_bp
+    from routes.admin import admin_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(members_bp)
@@ -88,6 +172,7 @@ def create_app():
     app.register_blueprint(projects_bp)
     app.register_blueprint(submissions_bp)
     app.register_blueprint(milestones_bp)
+    app.register_blueprint(admin_bp)
 
     with app.app_context():
         import models
@@ -138,6 +223,10 @@ def create_app():
                     'error': 'Organization Maintenance',
                     'message': 'Your organization is currently undergoing maintenance. Please try again later.',
                 }), 503
+
+    @app.route('/uploads/<path:filename>')
+    def serve_uploads(filename):
+        return send_from_directory(os.path.join(app.root_path, 'uploads'), filename)
 
     @app.errorhandler(500)
     @app.errorhandler(Exception)

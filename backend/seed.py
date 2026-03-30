@@ -25,16 +25,42 @@ def seed_data():
         # 2. Create Default Subscription Plans
         # Note: using 'max_projects' and 'has_ai_analysis' to match your middleware
         plans_data = [
-            {'name': 'Free', 'max_active_projects': 3, 'has_ai_feature': False},
-            {'name': 'Pro', 'max_active_projects': 50, 'has_ai_feature': True},
-            {'name': 'Enterprise', 'max_active_projects': 1000, 'has_ai_feature': True}
+            {
+                'name': 'Free', 
+                'max_active_projects': 3, 
+                'max_students': 10, 
+                'monthly_ai_limit': 5,
+                'validity_days': 30, 
+                'features': {'ai_analysis': False, 'premium_support': False}
+            },
+            {
+                'name': 'Pro', 
+                'max_active_projects': 50, 
+                'max_students': 500, 
+                'monthly_ai_limit': 100,
+                'validity_days': 30, 
+                'features': {'ai_analysis': True, 'premium_support': True}
+            },
+            {
+                'name': 'Enterprise', 
+                'max_active_projects': 1000, 
+                'max_students': 10000, 
+                'monthly_ai_limit': 10000,
+                'validity_days': 365, 
+                'features': {'ai_analysis': True, 'premium_support': True}
+            }
         ]
         for p_data in plans_data:
             plan = Plan.query.filter_by(name=p_data['name']).first()
             if not plan:
                 plan = Plan(**p_data)
                 db.session.add(plan)
-                print(f"Created plan: {p_data['name']}")
+            else:
+                # Update existing plan attributes
+                for key, val in p_data.items():
+                    setattr(plan, key, val)
+                print(f"Updated plan attributes: {p_data['name']}")
+            print(f"Created/Updated plan: {p_data['name']}")
         
         db.session.flush() # Ensure plans and roles are available for the next steps
 
@@ -49,8 +75,8 @@ def seed_data():
                 plan_id=pro_plan.id,
                 active_projects=0,
                 subscription_status='active',
-                # Set expiry to 1 year from now
-                subscription_ends_at=datetime.now(timezone.utc) + timedelta(days=365)
+                # Set expiry based on plan validity (Requirement 5)
+                subscription_ends_at=datetime.now(timezone.utc) + timedelta(days=pro_plan.validity_days)
             )
             db.session.add(test_org)
             db.session.flush()

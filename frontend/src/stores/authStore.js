@@ -13,12 +13,15 @@ export const useAuthStore = defineStore('auth', {
 
     getters: {
         isAuthenticated: (state) => !!state.token,
-        roles: (state) => (state.user?.roles || []).map(r => r.toLowerCase()),
-        userRole: (state) => state.user?.roles?.[0] || null,
+        roles: (state) => (state.user?.roles || []).map(r => (typeof r === 'string' ? r : r.name).toLowerCase()),
+        userRole: (state) => {
+            const r = state.user?.roles?.[0];
+            return r ? (typeof r === 'string' ? r : r.name) : null;
+        },
         orgId: (state) => state.user?.organization_id || null,
-        isAdmin: (state) => (state.user?.roles || []).map(r => r.toLowerCase()).includes('admin'),
-        isProfessor: (state) => (state.user?.roles || []).map(r => r.toLowerCase()).includes('professor'),
-        isStudent: (state) => (state.user?.roles || []).map(r => r.toLowerCase()).includes('student'),
+        isAdmin: (state) => (state.user?.roles || []).map(r => (typeof r === 'string' ? r : r.name).toLowerCase()).includes('admin'),
+        isProfessor: (state) => (state.user?.roles || []).map(r => (typeof r === 'string' ? r : r.name).toLowerCase()).includes('professor'),
+        isStudent: (state) => (state.user?.roles || []).map(r => (typeof r === 'string' ? r : r.name).toLowerCase()).includes('student'),
     },
 
     actions: {

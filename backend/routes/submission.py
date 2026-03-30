@@ -12,9 +12,9 @@ from flask_security import auth_token_required, current_user, roles_accepted
 from werkzeug.utils import secure_filename, safe_join
 from extentions import db
 from models import Submission, Project, Milestone, Enrollment, User
-from decorators import subscription_required, requires_feature
+from decorators import subscription_required, requires_feature, limit_check
 from schemas import submission_schema, student_submission_schema, user_schema
-from sqlalchemy import func, case
+from sqlalchemy import func, case, cast
 from sqlalchemy.exc import IntegrityError
 
 submissions_bp = Blueprint('submissions', __name__, url_prefix='/api/submissions')
@@ -92,7 +92,6 @@ def _effective_submission_deadline(submission, milestone):
 @auth_token_required
 @roles_accepted('student')
 @subscription_required()
-@requires_feature('has_ai_feature')
 def upload_submission(project_id):
     """Handles PDF uploads with milestone gating and overwrite-on-resubmit."""
     project = Project.query.filter_by(id=project_id, organization_id=current_user.organization_id).first()
@@ -263,8 +262,16 @@ def get_project_submissions(project_id):
     page = request.args.get('page', 1, type=int)
     per_page = min(request.args.get('per_page', 20, type=int), 100)
     
-    pagination = Submission.query.filter_by(project_id=project_id)\
-        .order_by(Submission.created_at.desc())\
+    # Filtering by Project (with implicit ownership check via Project.id)
+    query = Submission.query.join(Project).filter(
+        Submission.project_id == project_id,
+        Project.organization_id == current_user.organization_id
+    )
+    
+    if current_user.has_role('professor'):
+        query = query.filter(Project.professor_id == current_user.id)
+
+    pagination = query.order_by(Submission.created_at.desc())\
         .paginate(page=page, per_page=per_page, error_out=False)
 
     return json_response(True, "Fetched project submissions", {
@@ -329,7 +336,7 @@ def review_submission(submission_id):
     if project.professor_id != current_user.id:
         return json_response(False, "Unauthorized", None, 403)
 
-    ALLOWED_REVIEW_STATUSES = {'pending_review', 'approved', 'needs_revision', 'rejected'}
+    ALLOWED_REVIEW_STATUSES = {'pending_review', 'approved', 'rejected'}
     previous_status = submission.review_status or 'pending_review'
     next_status = previous_status
 
@@ -351,19 +358,19 @@ def review_submission(submission_id):
 
     if next_status == 'rejected':
         extension_days = submission.rejection_extension_days
-        should_recompute_deadline = previous_status != 'rejected' or submission.resubmission_deadline is None
+        should_recompute_deadline = previous_status != next_status or submission.resubmission_deadline is None
 
         if 'rejection_extension_days' in data:
             raw_extension_days = data.get('rejection_extension_days')
             if raw_extension_days in (None, '', False):
-                return json_response(False, 'Extension days are required when rejecting a submission', None, 400)
+                return json_response(False, 'Extension days are required when a rejection is issued', None, 400)
             
             try:
                 # Robustly handle various types (incl. strings like "5" or accidentally sent booleans)
                 if isinstance(raw_extension_days, bool):
                     # If it's a boolean 'true', it might mean something was selected but value not passed.
                     # We should probably still error out or default to something? Let's error and require a number.
-                    return json_response(False, 'Rejection requires a numeric amount of extension days.', None, 400)
+                    return json_response(False, 'Revision/Rejection requires a numeric amount of extension days.', None, 400)
                 
                 extension_days = int(raw_extension_days)
             except (TypeError, ValueError):
@@ -372,7 +379,7 @@ def review_submission(submission_id):
             should_recompute_deadline = True
 
         if extension_days is None or extension_days <= 0:
-            return json_response(False, 'Professor must provide at least 1 extra day when rejecting a submission', None, 400)
+            return json_response(False, 'Professor must provide at least 1 extra day when a revision or rejection is issued', None, 400)
 
         submission.rejection_extension_days = extension_days
 
@@ -560,6 +567,7 @@ def download_submission(submission_id):
 @roles_accepted('professor')
 @subscription_required()
 @requires_feature('has_ai_feature')
+@limit_check(org_attr="monthly_ai_count", plan_limit_attr="monthly_ai_limit")
 def trigger_ai_evaluation(submission_id):
     """
     Trigger Gemini AI analysis for a submission.

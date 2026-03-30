@@ -19,34 +19,68 @@ def _add_soft_delete_filter(execute_state):
 
 @event.listens_for(Session, 'before_flush')
 def update_project_counters(session, flush_context, instances):
+    from sqlalchemy import update
     from .base import Project, Organization # Prevent circularity
+    
+    # 1. NEW Active Projects
     for obj in list(session.new):
         if isinstance(obj, Project) and obj.status == "active":
-            org = session.get(Organization, obj.organization_id)
-            if org: org.active_projects += 1
+            session.execute(
+                update(Organization)
+                .where(Organization.id == obj.organization_id)
+                .values(active_projects=Organization.active_projects + 1)
+            )
     
+    # 2. DELETED Active Projects
     for obj in list(session.deleted):
         if isinstance(obj, Project) and obj.status == "active":
-            org = session.get(Organization, obj.organization_id)
-            if org: org.active_projects -= 1
+            session.execute(
+                update(Organization)
+                .where(Organization.id == obj.organization_id)
+                .values(active_projects=db.func.max(0, Organization.active_projects - 1))
+            )
 
+    # 3. UPDATED Status
     for obj in list(session.dirty):
         if isinstance(obj, Project):
             state = sa_inspect(obj)
             if state.attrs.status.history.has_changes():
                 hist = state.attrs.status.history
                 old, new = (hist.deleted[0] if hist.deleted else None), (hist.added[0] if hist.added else None)
-                org = session.get(Organization, obj.organization_id)
-                if org and old != new:
-                    if old == "active": org.active_projects = max(0, org.active_projects - 1)
-                    if new == "active": org.active_projects += 1
+                if old != new:
+                    if old == "active":
+                        session.execute(update(Organization).where(Organization.id == obj.organization_id).values(active_projects=db.func.max(0, Organization.active_projects - 1)))
+                    if new == "active":
+                        session.execute(update(Organization).where(Organization.id == obj.organization_id).values(active_projects=Organization.active_projects + 1))
 
-@event.listens_for(Session, 'before_flush') # Registered globally on the session
-def validate_submission_org_global(session, flush_context, instances):
-    from .base import Submission, Project # Prevent circularity
+@event.listens_for(Session, 'before_flush')
+def validate_usage_limits_global(session, flush_context, instances):
+    from .base import User, Organization, Project # Prevent circularity
+    
+    # 1. Validate User Limit (Requirement 4: Measurable limit enforcement)
+    for obj in list(session.new):
+        if isinstance(obj, User):
+            org = session.get(Organization, obj.organization_id)
+            if org and org.plan:
+                if org.active_students >= org.plan.max_students:
+                    raise ValueError(f"User limit reached for {org.plan.name} ({org.plan.max_students}). Please upgrade.")
+
+    # 2. Multi-tenant violation check
+    from .base import Submission
     for obj in list(session.new) + list(session.dirty):
         if isinstance(obj, Submission) and obj.project_id and obj.organization_id:
-            # Efficient check
             proj_org_id = session.query(Project.organization_id).filter(Project.id == obj.project_id).scalar()
             if proj_org_id and proj_org_id != obj.organization_id:
                 raise ValueError("Multi-tenant violation: Submission organization mismatch.")
+
+@event.listens_for(Session, 'before_flush')
+def update_user_counters(session, flush_context, instances):
+    from sqlalchemy import update
+    from .base import User, Organization
+    for obj in list(session.new):
+        if isinstance(obj, User):
+            session.execute(update(Organization).where(Organization.id == obj.organization_id).values(active_students=Organization.active_students + 1))
+    
+    for obj in list(session.deleted):
+        if isinstance(obj, User):
+            session.execute(update(Organization).where(Organization.id == obj.organization_id).values(active_students=db.func.max(0, Organization.active_students - 1)))

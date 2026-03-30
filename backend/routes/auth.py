@@ -62,6 +62,8 @@ def _plan_payload(plan):
         'name': plan.name,
         'display_name': plan.name,
         'max_active_projects': plan.max_active_projects,
+        'monthly_ai_limit': plan.monthly_ai_limit,
+        'validity_days': plan.validity_days,
         'has_ai_feature': plan.has_ai_feature,
         'feature_list': feature_list,
         'rank': _plan_rank(plan.name),
@@ -229,7 +231,8 @@ def login():
             "email": user.email,
             "organization_id": user.organization_id,
             "organization_name": user.organization.name if user.organization else None,
-            "roles": roles
+            "roles": roles,
+            "subscription": _subscription_snapshot(user.organization) if user.organization else None
         }
     }), 200
 

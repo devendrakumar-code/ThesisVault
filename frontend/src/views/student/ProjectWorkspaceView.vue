@@ -150,7 +150,7 @@
           <p class="text-sm text-slate-400 italic">Deadline has passed. No submission recorded for this milestone.</p>
         </div>
         <div v-else-if="m.my_submission?.review_status === 'rejected'" class="px-6 pb-5 text-center">
-          <p class="text-sm text-slate-500 italic">Your professor rejected this submission and the extra resubmission window has ended.</p>
+          <p class="text-sm text-slate-500 italic">Your professor flagged this submission for revision/rejection and the extra resubmission window has ended.</p>
         </div>
         <!-- Dormant message -->
         <div v-else-if="m.state === 'dormant'" class="px-6 pb-5">
@@ -254,7 +254,6 @@ const reviewStatusStyle = (status) => {
   const map = {
     pending_review: { badge: 'bg-slate-100 text-slate-500 border-slate-200', label: '⏳ Pending' },
     approved: { badge: 'bg-green-100 text-green-700 border-green-200', label: '✅ Approved' },
-    needs_revision: { badge: 'bg-yellow-100 text-yellow-700 border-yellow-200', label: '🔄 Revision' },
     rejected: { badge: 'bg-red-100 text-red-700 border-red-200', label: '❌ Rejected' },
   };
   return map[status] || map.pending_review;

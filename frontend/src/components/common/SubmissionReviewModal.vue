@@ -30,7 +30,7 @@
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
               New Tab
             </a>
-            <button @click="$emit('close')" class="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-all font-bold text-xl">×</button>
+            <button @click="$emit('close')" class="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-all font-bold text-xl">ï¿½</button>
           </div>
         </div>
 
@@ -115,7 +115,6 @@
                   >
                     <option value="pending_review">Pending Review</option>
                     <option value="approved">Approved</option>
-                    <option value="needs_revision">Needs Revision</option>
                     <option value="rejected">Rejected</option>
                   </select>
                 </div>
@@ -147,7 +146,7 @@
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class="p-4 bg-gradient-to-r from-indigo-50 to-violet-50 rounded-2xl border border-indigo-100">
                       <p class="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-1">AI Score</p>
-                      <p class="text-3xl font-black text-indigo-700">{{ submission.ai_score ?? '—' }}<span class="text-base text-indigo-400 font-bold">/100</span></p>
+                      <p class="text-3xl font-black text-indigo-700">{{ submission.ai_score ?? 'ï¿½' }}<span class="text-base text-indigo-400 font-bold">/100</span></p>
                     </div>
                     <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
                       <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Plagiarism Risk</p>
@@ -175,7 +174,7 @@
                   <div v-if="keyFindings.length" class="p-5 bg-slate-50 rounded-2xl border border-slate-100">
                     <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Key Findings</h4>
                     <ul class="space-y-2 text-sm text-slate-700 leading-relaxed">
-                      <li v-for="item in keyFindings" :key="item" class="flex gap-2"><span class="text-indigo-500">•</span><span>{{ item }}</span></li>
+                      <li v-for="item in keyFindings" :key="item" class="flex gap-2"><span class="text-indigo-500">ï¿½</span><span>{{ item }}</span></li>
                     </ul>
                   </div>
 
@@ -183,13 +182,13 @@
                     <div class="p-5 bg-emerald-50 rounded-2xl border border-emerald-100">
                       <h4 class="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-3">Strengths</h4>
                       <ul class="space-y-2 text-sm text-slate-700 leading-relaxed">
-                        <li v-for="item in strengths" :key="item" class="flex gap-2"><span class="text-emerald-500">•</span><span>{{ item }}</span></li>
+                        <li v-for="item in strengths" :key="item" class="flex gap-2"><span class="text-emerald-500">ï¿½</span><span>{{ item }}</span></li>
                       </ul>
                     </div>
                     <div class="p-5 bg-amber-50 rounded-2xl border border-amber-100">
                       <h4 class="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-3">Weaknesses</h4>
                       <ul class="space-y-2 text-sm text-slate-700 leading-relaxed">
-                        <li v-for="item in weaknesses" :key="item" class="flex gap-2"><span class="text-amber-500">•</span><span>{{ item }}</span></li>
+                        <li v-for="item in weaknesses" :key="item" class="flex gap-2"><span class="text-amber-500">ï¿½</span><span>{{ item }}</span></li>
                       </ul>
                     </div>
                   </div>
@@ -198,13 +197,13 @@
                     <div class="p-5 bg-rose-50 rounded-2xl border border-rose-100">
                       <h4 class="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-3">Risks</h4>
                       <ul class="space-y-2 text-sm text-slate-700 leading-relaxed">
-                        <li v-for="item in risks" :key="item" class="flex gap-2"><span class="text-rose-500">•</span><span>{{ item }}</span></li>
+                        <li v-for="item in risks" :key="item" class="flex gap-2"><span class="text-rose-500">ï¿½</span><span>{{ item }}</span></li>
                       </ul>
                     </div>
                     <div class="p-5 bg-blue-50 rounded-2xl border border-blue-100">
                       <h4 class="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-3">Recommended Next Actions</h4>
                       <ul class="space-y-2 text-sm text-slate-700 leading-relaxed">
-                        <li v-for="item in improvementActions" :key="item" class="flex gap-2"><span class="text-blue-500">•</span><span>{{ item }}</span></li>
+                        <li v-for="item in improvementActions" :key="item" class="flex gap-2"><span class="text-blue-500">ï¿½</span><span>{{ item }}</span></li>
                       </ul>
                     </div>
                   </div>
@@ -212,7 +211,7 @@
                   <div v-if="professorQuestions.length" class="p-5 bg-violet-50 rounded-2xl border border-violet-100">
                     <h4 class="text-[10px] font-black text-violet-600 uppercase tracking-widest mb-3">Questions for Viva or Discussion</h4>
                     <ul class="space-y-2 text-sm text-slate-700 leading-relaxed">
-                      <li v-for="item in professorQuestions" :key="item" class="flex gap-2"><span class="text-violet-500">•</span><span>{{ item }}</span></li>
+                      <li v-for="item in professorQuestions" :key="item" class="flex gap-2"><span class="text-violet-500">ï¿½</span><span>{{ item }}</span></li>
                     </ul>
                   </div>
                 </div>
@@ -354,7 +353,6 @@ const triggerAIEval = async (isRetry = false) => {
 const saveButtonLabel = computed(() => {
   if (form.value.review_status === 'approved') return 'Save Approval';
   if (form.value.review_status === 'rejected') return 'Save Rejection';
-  if (form.value.review_status === 'needs_revision') return 'Save Revision Request';
   return 'Save Review';
 });
 
@@ -366,7 +364,7 @@ const submitReview = async () => {
       remarks: form.value.remarks,
       review_status: form.value.review_status,
       rejection_extension_days: form.value.review_status === 'rejected'
-        ? form.value.rejection_extension_days
+        ? parseInt(form.value.rejection_extension_days) || 0
         : null,
     };
     await submissionService.reviewSubmission(props.submission.id, payload);

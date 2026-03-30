@@ -124,15 +124,6 @@ const statusStyles = computed(() => {
       sub: 'text-green-600',
       description: 'Congratulations! Your professor has approved your thesis.',
     },
-    needs_revision: {
-      card: 'bg-yellow-50 border-yellow-300',
-      icon: '🔄',
-      label: 'text-yellow-600',
-      title: 'text-yellow-800',
-      text: 'Needs Revision',
-      sub: 'text-yellow-600',
-      description: 'Your professor has requested changes. Please read the remarks below carefully.',
-    },
     rejected: {
       card: 'bg-red-50 border-red-300',
       icon: '❌',

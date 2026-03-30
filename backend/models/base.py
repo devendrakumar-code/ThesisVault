@@ -87,8 +87,20 @@ class UserRole(BaseModel):
 class Plan(BaseModel):
     __tablename__ = 'plans'
     name = db.Column(db.String(50), nullable=False, unique=True, index=True)
+    
+    # Usage Limits (Requirement 2: Data-Driven Modeling)
     max_active_projects = db.Column(db.Integer, nullable=False, default=10)
+    max_students = db.Column(db.Integer, nullable=False, default=100)
+    monthly_ai_limit = db.Column(db.Integer, nullable=False, default=50)
+    validity_days = db.Column(db.Integer, nullable=False, default=30)
+
+    # Feature Entitlements (Requirement 2: No code change needed for new features)
+    # Stores flags like: {"ai_analysis": true, "advanced_reporting": true}
+    features = db.Column(db.JSON, nullable=True)
+    
+    # Legacy flag for backward compat (will be deprecated)
     has_ai_feature = db.Column(db.Boolean, nullable=False, default=False)
+    
     organizations = db.relationship('Organization', backref='plan', lazy='select')
 
 class Organization(BaseModel):
@@ -104,10 +116,13 @@ class Organization(BaseModel):
     grace_period_ends_at = db.Column(db.DateTime(timezone=True), nullable=True) # Requirement 5: Lifecycle (Grace period)
     is_maintenance = db.Column(db.Boolean, default=False) # SaaS Operations: Kill switch
     
-    # Usage Tracking (Requirement: Monthly reset logic optional)
-    monthly_ai_limit = db.Column(db.Integer, default=50, nullable=False)
+    # Usage Tracking (Requirement: Monthly reset logic)
     monthly_ai_count = db.Column(db.Integer, default=0, nullable=False)
     last_usage_reset = db.Column(db.DateTime, default=func.now())
+    
+    # Denormalized for quick scaling/indexing
+    active_projects = db.Column(db.Integer, default=0, nullable=False)
+    active_students = db.Column(db.Integer, default=0, nullable=False)
 
     users = db.relationship('User', backref='organization', cascade="all, delete-orphan")
     projects = db.relationship('Project', backref='organization', cascade="all, delete-orphan")
@@ -149,6 +164,7 @@ class User(BaseModel, UserMixin):
     active = db.Column(db.Boolean(), default=True)
     fs_uniquifier = db.Column(db.String(36), unique=True, nullable=False, default=generate_uuid_v7)
     organization_id = db.Column(db.String(36), db.ForeignKey('organizations.id'), nullable=False, index=True)
+    profile_image = db.Column(db.String(255), nullable=True) # Relative path to profile image
 
     roles = db.relationship('Role', secondary=UserRole.__table__, backref=db.backref('users', lazy='dynamic'))
     student_profile = db.relationship('StudentProfile', backref='user', uselist=False, cascade="all, delete-orphan", lazy='joined')
@@ -213,9 +229,13 @@ class Submission(BaseModel):
     organization_id = db.Column(db.String(36), db.ForeignKey('organizations.id'), nullable=False, index=True)
     
     # Explicit relationships for nested serialization
-    student = db.relationship('User',foreign_keys=[student_id])
+    student = db.relationship('User', foreign_keys=[student_id], overlaps="submissions,user_owner")
     project = db.relationship('Project', backref=db.backref('submissions', lazy='dynamic'), foreign_keys=[project_id])
     milestone = db.relationship('Milestone', backref=db.backref('submissions', lazy='dynamic'), foreign_keys=[milestone_id])
+
+    @property
+    def project_name(self):
+        return self.project.name if self.project else "Unknown Project"
 
     __table_args__ = (
         Index('idx_sub_org_score', 'organization_id', 'ai_score'),

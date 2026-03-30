@@ -10,8 +10,17 @@
       
       <div class="relative z-10">
         <div class="flex items-center gap-6 mb-10">
-          <div class="w-24 h-24 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-4xl text-white font-bold shadow-neon border-4 border-white">
-            {{ form.name ? form.name.charAt(0).toUpperCase() : '👤' }}
+          <div 
+            @click="triggerFileSelect"
+            class="w-24 h-24 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-4xl text-white font-bold shadow-neon border-4 border-white cursor-pointer group relative overflow-hidden"
+            title="Click to change photo"
+          >
+            <img v-if="imagePreview || authStore.user?.profile_image" :src="imagePreview || getFullImageUrl(authStore.user.profile_image)" class="w-full h-full object-cover" />
+            <span v-else>{{ form.name ? form.name.charAt(0).toUpperCase() : '👤' }}</span>
+            <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-xs font-bold text-white">
+              CHANGE
+            </div>
+            <input type="file" ref="fileInput" class="hidden" accept="image/*" @change="handleFileChange" />
           </div>
           <div>
             <h2 class="text-2xl font-bold text-slate-900">{{ form.name || 'Your Profile' }}</h2>
@@ -89,6 +98,28 @@ const form = reactive({
   semester: 1
 });
 
+const fileInput = ref(null);
+const selectedFile = ref(null);
+const imagePreview = ref(null);
+
+const getFullImageUrl = (path) => {
+  if (!path) return null;
+  if (path.startsWith('http')) return path;
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+  const normalizedPath = path.startsWith('/') ? path.slice(1) : path;
+  return `${baseUrl}/${normalizedPath}`;
+};
+
+const triggerFileSelect = () => fileInput.value?.click();
+
+const handleFileChange = (e) => {
+  const file = e.target.files[0];
+  if (file) {
+    selectedFile.value = file;
+    imagePreview.value = URL.createObjectURL(file);
+  }
+};
+
 const loadProfile = async () => {
   try {
     const res = await profileService.getMyProfile();
@@ -112,19 +143,31 @@ const saveProfile = async () => {
   saving.value = true;
   message.value = null;
   try {
-    const payload = { name: form.name };
-    if (authStore.isProfessor) payload.department = form.department;
+    const formData = new FormData();
+    formData.append('name', form.name);
+    if (authStore.isProfessor) formData.append('department', form.department);
     if (authStore.isStudent) {
-      payload.major = form.major;
-      payload.semester = form.semester;
+      formData.append('major', form.major);
+      formData.append('semester', form.semester);
+    }
+    if (selectedFile.value) {
+      formData.append('image', selectedFile.value);
     }
 
-    await profileService.updateProfile(payload);
+    const updated = await profileService.updateProfile(formData);
+    
+    // Update the local authStore user data
+    // Assuming backend returns { success: true, message: ..., data: { ...user... } }
+    if (updated && updated.data) {
+      authStore.user = updated.data;
+      sessionStorage.setItem('user', JSON.stringify(updated.data));
+    }
+    
     message.value = { type: 'success', text: 'Profile updated successfully!' };
     
-    // Update the local authStore name if it changed
-    authStore.user.name = form.name;
-    localStorage.setItem('user', JSON.stringify(authStore.user));
+    // Clear temporary preview
+    selectedFile.value = null;
+    imagePreview.value = null;
   } catch (err) {
     message.value = { type: 'error', text: err.response?.data?.message || 'Update failed' };
   } finally {

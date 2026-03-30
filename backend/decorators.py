@@ -40,10 +40,10 @@ def subscription_required(message=None, code=403):
         return decorated_function
     return decorator
 
-def limit_check(message=None, code=403):
+def limit_check(org_attr="active_projects", plan_limit_attr="max_active_projects", message=None, code=403):
     """
-    Enforces the 'max_projects' limit from the Plan table.
-    Denies access when active_projects >= plan.max_projects.
+    Generic decorator to enforce numeric limits.
+    Compares org.{org_attr} against plan.{plan_limit_attr}.
     """
     def decorator(f):
         @wraps(f)
@@ -53,28 +53,21 @@ def limit_check(message=None, code=403):
                 current_app.logger.warning("Limit check failed: user %s has no organization", getattr(current_user, "id", None))
                 return json_error("Organization not found", 403)
             if not plan:
-                current_app.logger.warning("Limit check failed: org %s has no plan", getattr(org, "id", None))
                 return json_error("Plan configuration missing", 403)
 
-            # Defensive attribute access and coercion
             try:
-                active_projects = int(getattr(org, "active_projects", 0) or 0)
-                max_projects = int(getattr(plan, "max_active_projects", 0) or 0)
+                current_val = int(getattr(org, org_attr, 0) or 0)
+                limit_val = int(getattr(plan, plan_limit_attr, 0) or 0)
             except (TypeError, ValueError):
-                current_app.logger.exception("Invalid project counts for org %s", getattr(org, "id", None))
+                current_app.logger.exception("Invalid limit comparison for %s/%s", org_attr, plan_limit_attr)
                 return json_error("Server misconfiguration", 500)
 
-            if max_projects <= 0:
-                # Treat non-positive max as "no projects allowed" (fail closed)
-                current_app.logger.info("Plan %s has non-positive max_projects", getattr(plan, "name", None))
-                return json_error(message or f"Project limit reached for {getattr(plan, 'name', 'your plan')}. Please upgrade.", code)
+            if limit_val <= 0:
+                return json_error(message or f"Action restricted on {getattr(plan, 'name', 'your plan')}. Please upgrade.", code)
 
-            if active_projects >= max_projects:
-                current_app.logger.info(
-                    "Project limit reached for user %s org %s: %s/%s",
-                    getattr(current_user, "id", None), getattr(org, "id", None), active_projects, max_projects
-                )
-                return json_error(message or f"Project limit reached for {getattr(plan, 'name', 'your plan')} ({max_projects}). Please upgrade.", code)
+            if current_val >= limit_val:
+                friendly_name = org_attr.replace('_', ' ').title()
+                return json_error(message or f"{friendly_name} limit reached for {getattr(plan, 'name', 'your plan')} ({limit_val}). Please upgrade.", code)
 
             return f(*args, **kwargs)
         return decorated_function
@@ -93,14 +86,21 @@ def requires_feature(feature_name, message=None, code=403):
                 current_app.logger.warning("Feature check failed: user %s org plan missing", getattr(current_user, "id", None))
                 return json_error("Plan configuration missing", 403)
 
-            # Use getattr with default False; treat missing attribute as disabled
+            # 1. Check Legacy Column-based flag (if exists)
             has_feature = bool(getattr(plan, feature_name, False))
+            
+            # 2. Check Modern JSON-based features map (Requirement 2 & 3)
+            # This allows adding 'advanced_pdf', 'video_interview', etc. via DB only.
+            plan_features = getattr(plan, "features", None) or {}
+            if feature_name in plan_features:
+                has_feature = bool(plan_features[feature_name])
+
             if not has_feature:
                 current_app.logger.info(
                     "Feature '%s' denied for user %s plan %s",
                     feature_name, getattr(current_user, "id", None), getattr(plan, "name", None)
                 )
-                return json_error(message or f"The '{feature_name}' feature is not included in your current plan.", code)
+                return json_error(message or f"The '{feature_name}' feature is not included in your {getattr(plan, 'name', 'current')} plan. Please upgrade.", code)
             return f(*args, **kwargs)
         return decorated_function
     return decorator

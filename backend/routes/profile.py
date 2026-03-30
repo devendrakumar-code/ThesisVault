@@ -4,12 +4,19 @@ from extentions import db
 from models import User, ProfessorProfile, StudentProfile
 from schemas import user_schema
 from sqlalchemy.exc import SQLAlchemyError
+import os
+import uuid
+from werkzeug.utils import secure_filename
 
 profiles_bp = Blueprint('profiles', __name__, url_prefix='/api/profiles')
 
 MAX_NAME_LENGTH = 200
 MAX_DEPT_LENGTH = 120
 MAX_MAJOR_LENGTH = 120
+ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS
 
 def json_response(success, message, data=None, code=200):
     return jsonify({"success": success, "message": message, "data": data}), code
@@ -43,13 +50,18 @@ def get_my_profile():
         current_app.logger.exception("Failed to fetch profile for user %s", getattr(current_user, "id", None))
         return json_response(False, "Unable to fetch profile", None, 500)
 
-@profiles_bp.route('/me', methods=['PATCH'])
+@profiles_bp.route('/me', methods=['PATCH', 'POST'])
 @auth_token_required
 def update_my_profile():
     """Allows users to update their own name or role-specific details."""
-    payload = request.get_json(silent=True) or {}
-    if not isinstance(payload, dict) or not payload:
-        return json_response(False, "No data provided", None, 400)
+    # Handle Multipart/Form-Data (for image uploads) or JSON
+    if request.content_type and 'multipart/form-data' in request.content_type:
+        payload = request.form.to_dict()
+    else:
+        payload = request.get_json(silent=True) or {}
+    
+    if not isinstance(payload, dict):
+        return json_response(False, "Invalid data format", None, 400)
 
     # Only allow explicit fields
     allowed_user_fields = {'name'}
@@ -70,6 +82,38 @@ def update_my_profile():
             return json_response(False, f"Name too long (max {MAX_NAME_LENGTH})", None, 400)
         current_user.name = name
         user_changed = True
+
+    # Image upload logic
+    if 'image' in request.files:
+        file = request.files['image']
+        if file and allowed_file(file.filename):
+            # Use configured upload folder; fallback to 'uploads' in root_path
+            upload_base = current_app.config.get('UPLOAD_FOLDER') or os.path.join(current_app.root_path, 'uploads')
+            upload_folder = os.path.join(upload_base, 'profiles')
+            os.makedirs(upload_folder, exist_ok=True)
+            
+            # Secure filename and add UUID to prevent collisions
+            ext = file.filename.rsplit('.', 1)[1].lower()
+            filename = secure_filename(f"{current_user.id}_{uuid.uuid4().hex}.{ext}")
+            file_path = os.path.join(upload_folder, filename)
+            
+            # Storage path to save in DB (relative to static server root)
+            db_storage_path = f"uploads/profiles/{filename}"
+            
+            # Delete old image if it exists
+            if current_user.profile_image:
+                old_rel_path = current_user.profile_image.replace('uploads/', '', 1).lstrip('/')
+                old_full_path = os.path.join(upload_base, old_rel_path)
+                if os.path.exists(old_full_path):
+                    try:
+                        os.remove(old_full_path)
+                    except Exception:
+                        current_app.logger.warning("Failed to delete old profile image: %s", old_full_path)
+
+            file.save(file_path)
+            current_user.profile_image = db_storage_path
+            user_changed = True
+            current_app.logger.info("Profile image saved for user %s at %s", current_user.id, file_path)
 
     # Role-specific updates
     try:
@@ -152,4 +196,3 @@ def update_my_profile():
         db.session.rollback()
         current_app.logger.exception("Unexpected error updating profile for user %s", current_user.id)
         return json_response(False, "Unable to update profile", None, 500)
-
