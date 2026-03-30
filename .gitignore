@@ -1,10 +1,10 @@
 venv/
 # --- Python / Flask Secrets ---
-backend/config.py
-backend/config_template.py
 .env
 .env.*
-!.env.example
+!backend/config.py
+!backend/config_template.py
+!/.env.example
 __pycache__/
 *.pyc
 instance/
