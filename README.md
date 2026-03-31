@@ -35,6 +35,23 @@ and every API action is gated by:
 ---
 
 ## 🏗️ Architecture
+
+
+---
+
+## 🗄️ Database Schema
+
+> 14 tables · UUID v7 PKs · Multi-tenant scoped · Soft deletes on all models
+
+![Database ER Diagram](/thesis_vault.png)
+
+**Core relationships:**
+- `Plan` → `Organization` (1:N) — org subscribes to a plan
+- `Organization` → `User` → `Project` → `Milestone` → `Submission`
+- `SubscriptionHistory` — immutable audit log of every plan change
+- `ActivityLog` — tracks all admin actions with timestamps
+
+  
 Vue 3 SPA → Nginx (HTTPS) → Flask API → MySQL
 ↓
 Celery Worker → Redis
