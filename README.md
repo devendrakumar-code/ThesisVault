@@ -10,6 +10,7 @@
 [![Vue.js](https://img.shields.io/badge/Vue.js-3.x-42b883?style=for-the-badge&logo=vue.js)](https://vuejs.org)
 [![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1?style=for-the-badge&logo=mysql&logoColor=white)](https://mysql.com)
 [![Redis](https://img.shields.io/badge/Redis-Celery-DC382D?style=for-the-badge&logo=redis&logoColor=white)](https://redis.io)
+[![Presentation](https://img.shields.io/badge/📊_Presentation-Download_PPTX-4f46e5?style=for-the-badge&logo=microsoftpowerpoint)](https://github.com/devendrakumar-code/ThesisVault/blob/main/ThesisVault-SaaS-Entitlement-FINAL%20(1).pptx)
 
 > Built as part of the **Migri Technologies Full Stack Development Apprentice Assessment**
 
@@ -36,22 +37,6 @@ and every API action is gated by:
 
 ## 🏗️ Architecture
 
-
----
-
-## 🗄️ Database Schema
-
-> 14 tables · UUID v7 PKs · Multi-tenant scoped · Soft deletes on all models
-
-![Database ER Diagram](/thesis_vault.png)
-
-**Core relationships:**
-- `Plan` → `Organization` (1:N) — org subscribes to a plan
-- `Organization` → `User` → `Project` → `Milestone` → `Submission`
-- `SubscriptionHistory` — immutable audit log of every plan change
-- `ActivityLog` — tracks all admin actions with timestamps
-
-  
 Vue 3 SPA → Nginx (HTTPS) → Flask API → MySQL
 ↓
 Celery Worker → Redis
@@ -61,10 +46,24 @@ Gemini 2.5 Flash (AI)
 
 **Three middleware decorators enforce every rule:**
 ```python
-@subscription_required                              # Is org active?
-@requires_feature('ai_analysis')                    # Plan includes AI?
-@limit_check('active_projects', 'max_active_projects')  # Within quota?
+@subscription_required                                       # Is org active?
+@requires_feature('ai_analysis')                             # Plan includes AI?
+@limit_check('active_projects', 'max_active_projects')       # Within quota?
 ```
+
+---
+
+## 🗄️ Database Schema
+
+> 14 tables · UUID v7 PKs · Multi-tenant scoped · Soft deletes on all models
+
+![Database ER Diagram](thesis_vault.png)
+
+**Core relationships:**
+- `Plan` → `Organization` (1:N) — org subscribes to a plan
+- `Organization` → `User` → `Project` → `Milestone` → `Submission`
+- `SubscriptionHistory` — immutable audit log of every plan change
+- `ActivityLog` — tracks all admin actions with timestamps
 
 ---
 
@@ -95,7 +94,7 @@ Plans are **fully database-driven** — add a new plan without touching business
 
 ```bash
 # 1. Clone
-git clone <repo-url> && cd thesisvault
+git clone https://github.com/devendrakumar-code/ThesisVault && cd ThesisVault
 
 # 2. Backend
 cd backend && python -m venv venv && source venv/bin/activate
@@ -123,6 +122,14 @@ celery -A app:celery worker --loglevel=info -Q ai,default
 
 ---
 
+## 📊 Presentation
+
+> Full system design, architecture diagrams, and implementation walkthrough
+
+[![Download Presentation](https://img.shields.io/badge/Download-ThesisVault_Presentation.pptx-4f46e5?style=for-the-badge&logo=microsoftpowerpoint&logoColor=white)](https://github.com/devendrakumar-code/ThesisVault/blob/main/ThesisVault-SaaS-Entitlement-FINAL%20(1).pptx)
+
+---
+
 ## 📦 Deliverables
 
 - ✅ Live deployment → [thesisvault.live](https://thesisvault.live)
@@ -131,6 +138,7 @@ celery -A app:celery worker --loglevel=info -Q ai,default
 - ✅ AI-powered thesis evaluation pipeline (Gemini + Celery)
 - ✅ Subscription lifecycle + grace period + maintenance mode
 - ✅ Full audit trail
+- ✅ Presentation → [Download PPTX](https://github.com/devendrakumar-code/ThesisVault/blob/main/ThesisVault-SaaS-Entitlement-FINAL%20(1).pptx)
 
 ---
 
@@ -139,3 +147,4 @@ celery -A app:celery worker --loglevel=info -Q ai,default
 Made with ❤️ by **Devendra Kumar**
 
 </div>
+
