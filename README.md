@@ -1,140 +1,124 @@
-# ThesisVault
+<div align="center">
 
-ThesisVault is a multi-tenant SaaS application built to demonstrate a **Subscription & Feature Entitlement System** for a production-oriented use case.  
-The platform models how organizations subscribe to plans, access entitled features, and are restricted by usage limits at the **API level**.
+# 🎓 ThesisVault
 
-## Problem Statement
+**A Production-Grade Multi-Tenant SaaS Platform**
+*Subscription & Feature Entitlement System*
 
-Modern SaaS applications need more than login and roles. They must also decide whether a tenant is allowed to perform an action based on:
+[![Live Demo](https://img.shields.io/badge/🌐_Live_Demo-thesisvault.live-4f46e5?style=for-the-badge)](https://thesisvault.live)
+[![Flask](https://img.shields.io/badge/Flask-3.x-000000?style=for-the-badge&logo=flask)](https://flask.palletsprojects.com)
+[![Vue.js](https://img.shields.io/badge/Vue.js-3.x-42b883?style=for-the-badge&logo=vue.js)](https://vuejs.org)
+[![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1?style=for-the-badge&logo=mysql&logoColor=white)](https://mysql.com)
+[![Redis](https://img.shields.io/badge/Redis-Celery-DC382D?style=for-the-badge&logo=redis&logoColor=white)](https://redis.io)
 
-- Active subscription status
-- Enabled plan features
-- Usage limits
-- Tenant isolation rules
+> Built as part of the **Migri Technologies Full Stack Development Apprentice Assessment**
 
-ThesisVault implements these ideas in a thesis/project management domain.
+</div>
 
-## Core Features
+---
 
-- Multi-tenant architecture with organization-level isolation
-- Database-driven subscription plans
-- API-level entitlement enforcement through centralized middleware/decorators
-- Feature access control based on plan entitlements
-- Usage limit enforcement for resources and AI operations
-- Subscription lifecycle handling: active, expired, grace period, maintenance mode
-- Plan upgrade/downgrade support with subscription history tracking
-- Audit trail using activity logs and subscription history
-- Admin dashboard to monitor plans, limits, and organization state
+## 🚀 What is ThesisVault?
 
-## Tech Stack
+ThesisVault is a **thesis project management platform** that demonstrates a complete
+subscription-driven feature entitlement system. Organizations subscribe to plans,
+and every API action is gated by:
 
-### Backend
-- Flask
-- SQLAlchemy
-- Flask-Security
-- MySQL
-- Celery
+| Check | What it validates |
+|---|---|
+| 🔐 Auth | Valid, non-revoked token |
+| 📋 Subscription | Plan is active and not expired |
+| ✨ Feature | Plan includes the requested feature |
+| 📊 Usage Limit | Org is within plan quota |
 
-### Frontend
-- Vue 3
-- Vite
-- Tailwind CSS
+> **All enforcement happens at the API level — never just the frontend.**
 
-## Subscription Model
+---
 
-Plans are stored in the database and can define:
+## 🏗️ Architecture
+Vue 3 SPA → Nginx (HTTPS) → Flask API → MySQL
+↓
+Celery Worker → Redis
+↓
+Gemini 2.5 Flash (AI)
 
-- Plan name
-- Enabled features
-- Maximum active projects
-- Maximum students
-- Monthly AI usage limit
-- Validity duration
 
-This makes the system extensible without changing business logic for every new plan.
-
-## Entitlement Enforcement
-
-The system enforces subscription rules at the backend using centralized decorators/middleware:
-
-- Subscription validation
-- Feature entitlement validation
-- Usage limit validation
-
-This ensures restricted actions are blocked at the API layer, not just hidden in the UI.
-
-## Multi-Tenant Design
-
-Each organization acts as a tenant and has:
-
-- Users
-- Projects
-- One active subscription plan
-- Usage counters and lifecycle state
-
-Tenant boundaries are enforced using `organizationId` scoping and backend validation checks to prevent cross-tenant access.
-
-## Auditability
-
-ThesisVault maintains:
-
-- `SubscriptionHistory` for plan changes
-- `ActivityLog` for key administrative actions
-
-This supports traceability, compliance review, and easier debugging of subscription events.
-
-## Local Setup
-
-### 1. Clone the repository
-```bash
-git clone <your-repo-url>
-cd thesisvault
+**Three middleware decorators enforce every rule:**
+```python
+@subscription_required                              # Is org active?
+@requires_feature('ai_analysis')                    # Plan includes AI?
+@limit_check('active_projects', 'max_active_projects')  # Within quota?
 ```
 
-### 2. Backend setup
+---
+
+## 💎 Subscription Plans
+
+| Feature | 🆓 Free | ⚡ Pro | 🏢 Enterprise |
+|---|---|---|---|
+| Active Projects | 3 | 50 | Unlimited |
+| Students | 50 | 500 | Unlimited |
+| AI Evaluations/month | ❌ | 100 | Unlimited |
+| Grace Period | ❌ | ✅ | ✅ |
+
+Plans are **fully database-driven** — add a new plan without touching business logic.
+
+---
+
+## 🛠️ Tech Stack
+
+**Backend:** Flask · SQLAlchemy · Flask-Security-Too · MySQL · Celery · Redis  
+**Frontend:** Vue 3 · Vite · Tailwind CSS · Pinia  
+**AI:** Google Gemini 2.5 Flash  
+**Infrastructure:** Ubuntu VPS · Nginx · Gunicorn · Let's Encrypt SSL  
+**Email:** Flask-Mailman · Gmail SMTP  
+
+---
+
+## ⚡ Quick Start
+
 ```bash
-cd backend
-python -m venv venv
-source venv/bin/activate
+# 1. Clone
+git clone <repo-url> && cd thesisvault
+
+# 2. Backend
+cd backend && python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-```
-
-### 3. Configure environment
-Create your environment/config file and update database, mail, and app settings as needed.
-
-### 4. Run migrations / seed data
-```bash
-flask db upgrade
-python seed.py
-```
-
-### 5. Start backend
-```bash
+cp config-template.py config.py   # add your DB, Gemini API key, mail config
+flask db upgrade && python seed.py
 python app.py
+
+# 3. Frontend
+cd ../frontend && npm install && npm run dev
+
+# 4. Celery worker (for AI evaluation)
+celery -A app:celery worker --loglevel=info -Q ai,default
 ```
 
-### 6. Start frontend
-```bash
-cd ../frontend
-npm install
-npm run dev
-```
+---
 
-## Deliverables Covered
+## 🔑 Key Implementation Highlights
 
-This project includes:
+- **Race condition prevention** — atomic SQL increments (`UPDATE ... SET count = count + 1`)
+- **Token revocation** — `RevokedToken` table checked on every request
+- **Cross-tenant isolation** — global `@before_flush` hook blocks cross-org writes
+- **Soft deletes** — all models use `deleted_at` with automatic query filtering
+- **Audit trail** — every plan change and admin action logged immutably
 
-- Public GitHub repository with source code
-- README
-- Multi-tenant SaaS implementation
-- Subscription & feature entitlement enforcement
-- Usage tracking and auditability support
-- Architecture and schema documentation for presentation
+---
 
-## Notes
+## 📦 Deliverables
 
-This project was developed as part of a **Full Stack Development Apprentice assessment**, focused on building a scalable and extensible subscription enforcement system for a SaaS application.
+- ✅ Live deployment → [thesisvault.live](https://thesisvault.live)
+- ✅ Multi-tenant SaaS with full subscription enforcement
+- ✅ API-level feature + usage limit gating
+- ✅ AI-powered thesis evaluation pipeline (Gemini + Celery)
+- ✅ Subscription lifecycle + grace period + maintenance mode
+- ✅ Full audit trail
 
-## Author
+---
 
-Developed by **Devendra Kumar**
+<div align="center">
+
+Made with ❤️ by **Devendra Kumar**
+
+</div>
